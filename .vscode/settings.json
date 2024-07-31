@@ -53,6 +53,15 @@
         "__tree": "cpp",
         "execution": "cpp",
         "ios": "cpp",
-        "locale": "cpp"
+        "locale": "cpp",
+        "chrono": "cpp",
+        "*.ipp": "cpp",
+        "deque": "cpp",
+        "forward_list": "cpp",
+        "list": "cpp",
+        "span": "cpp",
+        "valarray": "cpp",
+        "format": "cpp",
+        "__hash_table": "cpp"
     }
 }

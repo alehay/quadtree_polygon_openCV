@@ -10,128 +10,199 @@
 #include <type_traits>
 #include <vector>
 
-template <typename T> class constrainNode;
-template <typename T, typename Cont> class containNode;
+#include <iostream>
 
-enum Quadrant : std::uint8_t { TL = 0, TR = 1, BL = 2, BR = 3, NONE = 4 };
+enum class Quadrant : std::uint8_t { TL = 0, TR = 1, BL = 2, BR = 3, NONE = 4 };
 
 template <typename T> class Node {
 public:
-  cv::Point<T> TL;
-  cv::Point<T> TR;
-  cv::Point<T> BR;
-  cv::Point<T> BL;
+  cv::Point_<T> TL;
+  cv::Point_<T> BR;
 
-  Quadrant get_quadrant_point(Point<T> &p) {
-    if (p.x < TL.x or p.y < TL.y) {
+  Node(const cv::Point_<T> &_TL, const cv::Point_<T> &_BR) : TL(_TL), BR(_BR) {}
+
+  virtual ~Node() = default; // Virtual destructor for polymorphic base class
+  cv::Point_<T> get_median(const cv::Point_<T> &p1,
+                           const cv::Point_<T> &p2) const {
+    return (p1 + p2) / 2;
+  }
+  Quadrant getQuadrant(const cv::Point_<T> &p) const {
+    if (p.x < TL.x || p.y < TL.y || p.x > BR.x || p.y > BR.y) {
       return Quadrant::NONE;
     }
-    if (p.x > BR.x or p.y > BR.y) {
-      return Quadrant::NONE;
-    }
-    cv::Point<T> median = (TL + TR + BL + BR) / 4;
-    if (p.x >= TL.x and p.y >= TL.y) {
-      if (p.x < median.x and p.y < median.y) {
-        return Quadrant::TL;
-      }
-      if (p.x >= median.x and p.y < median.y) {
-        return Quadrant::TR;
-      }
-      if (p.x < median.x and p.y >= median.y) {
-        return Quadrant::BL;
-      }
-      if (p.x >= median.x and p.y >= median.y) {
-        return Quadrant::BR;
-      }
-    }
+    cv::Point_<T> median = get_median(TL, BR);
+
+    if (p.x < median.x && p.y < median.y)
+      return Quadrant::TL;
+    if (p.x >= median.x && p.y < median.y)
+      return Quadrant::TR;
+    if (p.x < median.x && p.y >= median.y)
+      return Quadrant::BL;
+    if (p.x >= median.x && p.y >= median.y)
+      return Quadrant::BR;
+
     return Quadrant::NONE;
   }
 
-  Node(cv::Point<T> _TL, cv::Point<T> _TR, cv::Point<T> _BR, cv::Point<T> _BL)
-      : TL(_TL), TR(_TR), BR(_BR), BL(_BL) {}
+  std::pair<cv::Point_<T>, cv::Point_<T>> getPointToQuadrant(Quadrant q) {
+    cv::Point_<T> MED = get_median(TL, BR);
+    switch (q) {
+    case Quadrant::TL:
+      return std::make_pair(TL, MED);
+    case Quadrant::TR:
+      return std::make_pair(cv::Point_<T>(MED.x, TL.y),
+                            cv::Point_<T>(BR.x, MED.y));
+    case Quadrant::BL:
+      return std::make_pair(cv::Point_<T>(TL.x, MED.y),
+                            cv::Point_<T>(MED.x, BR.y));
+    case Quadrant::BR:
+      return std::make_pair(MED, BR);
 
-  virtual constrainNode<T> create_constrain_node();
-  virtual containNode<T, Cont> create_contain_node();
+    case Quadrant::NONE:
+    default:
+      return std::make_pair(cv::Point_<T>(), cv::Point_<T>());
+    }
+  }
 
-  virtual ~Node() = default; // Virtual destructor for polymorphic base class
+  //  virtual std::unique_ptr<Node<T>> createConstrainNode() = 0;
+  //  virtual std::unique_ptr<Node<T>> createContainNode() = 0;
 };
 
-template <typename T> class constrainNode : public Node<T> {
+template <typename T> class ConstrainNode : public Node<T> {
 public:
-  std::unique_ptr < Node<T> TLNode = nullptr;
-  std::unique_ptr < Node<T> TRNode = nullptr;
-  std::unique_ptr < Node<T> BLNode = nullptr;
-  std::unique_ptr < Node<T> BRNode = nullptr;
+  std::unique_ptr<Node<T>> TLNode = nullptr;
+  std::unique_ptr<Node<T>> TRNode = nullptr;
+  std::unique_ptr<Node<T>> BLNode = nullptr;
+  std::unique_ptr<Node<T>> BRNode = nullptr;
 
-  constrainNode(cv::Point<T> _TL, cv::Point<T> _TR, cv::Point<T> _BR,
-                cv::Point<T> _BL)
-      : Node<T>(_TL, _TR, _BR, _BL) {}
+  ConstrainNode(cv::Point_<T> _TL, cv::Point_<T> _BR) : Node<T>(_TL, _BR) {}
 
-  ~constrainNode() override = default;
+  ~ConstrainNode() override = default;
+
+  std::unique_ptr<Node<T>> createConstrainNode(Quadrant q) {
+    // Implementation for creating a constrain node
+  }
+
+  std::unique_ptr<Node<T>> createContainNode() {
+    // Implementation for creating a contain node
+  }
 };
 
-template <typename T, typename Cont> class containNode : public Node<T> {
+template <typename T, typename Cont> class ContainNode : public Node<T> {
 public:
   Cont ContValue;
 
-  containNode(cv::Point<T> _TL, cv::Point<T> _TR, cv::Point<T> _BR,
-              cv::Point<T> _BL, Cont &&_Cont)
-      : Node<T, Cont>(_TL, _TR, _BR, _BL),
-        ContValue(std::forward<Cont>(_Cont)) {}
+  // ContainNode(const cv::Point_<T>& _TL, const cv::Point_<T>& _BR, Cont&&
+  // _Cont)
+  //         : Node<T>(_TL, _BR), ContValue(std::forward<Cont>(_Cont)) {}
 
-  ~containNode() override {
-    if constexpr (!std::is_pointer<Cont>::value) {
-    }
+  // ContainNode(const cv::Point_<T>& _TL, const cv::Point_<T>& _BR, Cont _Cont)
+  //         : Node<T>(_TL, _BR), ContValue(_Cont) {}
+
+  ContainNode(const cv::Point_<T> &_TL, const cv::Point_<T> &_BR, Cont _Cont)
+      : Node<T>(_TL, _BR), ContValue(_Cont) {}
+
+  ~ContainNode() override = default;
+
+  std::unique_ptr<Node<T>> createConstrainNode() {
+    // Implementation for creating a constrain node
+  }
+
+  std::unique_ptr<Node<T>> createContainNode() {
+    // Implementation for creating a contain node
   }
 };
 
 template <typename T, typename P> class QuadTree {
 private:
-  std::unique_ptr < constrainNode<T> root = nullptr;
-  std::size_t depth = 3;
+  std::unique_ptr<ConstrainNode<T>> root = nullptr;
+  std::size_t depth = 2;
 
 public:
   QuadTree() = default;
 
-  bool set_root(cv::Point<T> TL, cv::Point<T> TR, cv::Point<T> BR,
-                cv::Point<T> BL) {
-    root = std::make_unique < constrainNode<T>(TL, TR, BR, BL);
+  bool setRoot(cv::Point_<T> TL, cv::Point_<T> BR) {
+    root = std::make_unique<ConstrainNode<T>>(TL, BR);
     return true;
   }
 
-  bool insert(const std::vector<cv::Point<T>> &polygon) {
-    if (root == nullptr) {
+  ConstrainNode<T> *insertConstrain(Quadrant q, ConstrainNode<T> *node) {
+    std::pair<cv::Point_<T>, cv::Point_<T>> new_rect =
+        node->getPointToQuadrant(q);
+    switch (q) {
+    case Quadrant::TL:
+      node->TLNode = std::make_unique<ConstrainNode<T>>(
+          ConstrainNode<T>(new_rect.first, new_rect.second));
+      return TLNode.get();
+    case Quadrant::TR:
+      node->TRNode = std::make_unique<ConstrainNode<T>>(
+          ConstrainNode<T>(new_rect.first, new_rect.second));
+      return TRNode.get();
+    case Quadrant::BL:
+      node->BLNode = std::make_unique<ConstrainNode<T>>(
+          ConstrainNode<T>(new_rect.first, new_rect.second));
+      return BLNode.get();
+    case Quadrant::BR:
+      node->BRNode = std::make_unique<ConstrainNode<T>>(
+          ConstrainNode<T>(new_rect.first, new_rect.second));
+      return BRNode.get();
+    case Quadrant::NONE:
+    default:
+      return nullptr;
+    }
+  }
+
+  bool insertContain(Quadrant q, ConstrainNode<T> *node) {
+    std::pairr<cv::Point_<T>, cv::Point_<T>> new_rect =
+        node->getPointToQuadrant(q);
+    switch (q) {
+    case Quadrant::TL:
+      node->TLNode = std::make_unique<ContainNode<T, P>>(
+          ContainNode<T, P>(new_rect.first, new_rect.second));
+      return TLNode.get();
+    case Quadrant::TR:
+      node->TRNode = std::make_unique<ContainNode<T, P>>(
+          ContainNode<T, P>(new_rect.first, new_rect.second));
+      return TRNode.get();
+    case Quadrant::BL:
+      node->BLNode = std::make_unique<ContainNode<T, P>>(
+          ContainNode<T, P>(new_rect.first, new_rect.second));
+      return BLNode.get();
+    case Quadrant::BR:
+      node->BRNode = std::make_unique<ContainNode<T, P>>(
+          ContainNode<T, P>(new_rect.first, new_rect.second));
+      return BRNode.get();
+    case Quadrant::NONE:
+    default:
+      return nullptr;
+    }
+  }
+
+  bool insert(P polygon) {
+    if (!root)
       return false;
+
+    int insert_deph = depth;
+    ConstrainNode<T> *node = root.get();
+
+    for (int i = 0; i < depth; ++i) {
+      std::vector<Quadrant> quadrants;
+
+      std::transform(
+          polygon->begin(), polygon->end(), std::back_inserter(quadrants),
+          [&](const cv::Point_<T> &p) { return node->getQuadrant(p); });
+
+      bool allInSameQuadrant =
+          std::adjacent_find(quadrants.begin(), quadrants.end(),
+                             std::not_equal_to<>()) == quadrants.end();
+
+      if (allInSameQuadrant) {
+        node =  node->createConstrainNode(quadrants[0]);
+      } else () 
+
     }
-
-    Node<T> *node = root.get();
-
-    std::vector<Quadrant> quadrant;
-
-    std::transform(polygon.begin(), polygon.end(), std::back_inserter(quadrant),
-                   [&](const Point &p) { return root->get_quadrant_point(p); });
-
-    bool all_in_quadrant = std::equal(vec.begin() + 1, vec.end(), vec.begin());
-
-    if (all_in_quadrant) {
-
-      Point<T> median = (TL + TR + BL + BR) / 4;
-
-      switch (quadrant[0]) {
-      case Quadrant::TL break; 
-        node->TLNode = std::make_unique < containNode<T, cv::Point<T>>(TL, (TL.x, median.y), 
-      case Quadrant::TR:
-        node->TRNode = std::make_unique < containNode<T, cv::Point<T>>() break;
-      case Quadrant::BL:
-        break;
-      case Quadrant::BR:
-        break;
-      case Quadrant::NONE:
-      default:
-        break;
-      }
-    }
+    return true;
   }
 };
 
-#endif __QQUADTREE_HPP__
+#endif //__QQUADTREE_HPP__

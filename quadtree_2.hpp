@@ -18,10 +18,10 @@ template <typename T, typename P> class Node {
 public:
   cv::Point_<T> TL;
   cv::Point_<T> BR;
-  std::unique_ptr<Node<T,P>> TLNode = nullptr;
-  std::unique_ptr<Node<T,P>> TRNode = nullptr;
-  std::unique_ptr<Node<T,P>> BLNode = nullptr;
-  std::unique_ptr<Node<T,P>> BRNode = nullptr;
+  std::unique_ptr<Node<T, P>> TLNode = nullptr;
+  std::unique_ptr<Node<T, P>> TRNode = nullptr;
+  std::unique_ptr<Node<T, P>> BLNode = nullptr;
+  std::unique_ptr<Node<T, P>> BRNode = nullptr;
   std::vector<P> contain;
 
 public:
@@ -34,6 +34,9 @@ public:
                            const cv::Point_<T> &p2) const {
     return (p1 + p2) / 2;
   }
+
+  cv::Point_<T> getTL() const { return TL; }
+  cv::Point_<T> getBR() const { return BR; }
 
   Quadrant getQuadrant(const cv::Point_<T> &p) const {
     if (p.x < TL.x || p.y < TL.y || p.x > BR.x || p.y > BR.y) {
@@ -53,7 +56,7 @@ public:
     return Quadrant::NONE;
   }
 
-  Node<T,P> * getNodeQuadrant(Quadrant q) {
+  Node<T, P> *getNodeQuadrant(Quadrant q) {
     switch (q) {
     case Quadrant::TL:
       return TLNode.get();
@@ -92,14 +95,14 @@ public:
 
 template <typename T, typename P> class QuadTree {
 private:
-  std::unique_ptr<Node<T,P>> root = nullptr;
-  std::size_t depth = 2;
+  std::unique_ptr<Node<T, P>> root = nullptr;
+  std::size_t depth = 6;
 
 public:
   QuadTree() = default;
 
   bool setRoot(cv::Point_<T> TL, cv::Point_<T> BR) {
-    root = std::make_unique<Node<T,P>>(TL, BR);
+    root = std::make_unique<Node<T, P>>(TL, BR);
     return true;
   }
 
@@ -108,20 +111,20 @@ public:
         node->getPointToQuadrant(q);
     switch (q) {
     case Quadrant::TL:
-      node->TLNode = std::make_unique<Node<T,P>>(
-          Node<T,P>(new_rect.first, new_rect.second));
+      node->TLNode = std::make_unique<Node<T, P>>(
+          Node<T, P>(new_rect.first, new_rect.second));
       return node->TLNode.get();
     case Quadrant::TR:
-      node->TRNode = std::make_unique<Node<T,P>>(
-          Node<T,P>(new_rect.first, new_rect.second));
+      node->TRNode = std::make_unique<Node<T, P>>(
+          Node<T, P>(new_rect.first, new_rect.second));
       return node->TRNode.get();
     case Quadrant::BL:
-      node->BLNode = std::make_unique<Node<T,P>>(
-          Node<T,P>(new_rect.first, new_rect.second));
+      node->BLNode = std::make_unique<Node<T, P>>(
+          Node<T, P>(new_rect.first, new_rect.second));
       return node->BLNode.get();
     case Quadrant::BR:
-      node->BRNode = std::make_unique<Node<T,P>>(
-          Node<T,P>(new_rect.first, new_rect.second));
+      node->BRNode = std::make_unique<Node<T, P>>(
+          Node<T, P>(new_rect.first, new_rect.second));
       return node->BRNode.get();
     case Quadrant::NONE:
     default:
@@ -145,16 +148,17 @@ public:
       bool allInSameQuadrant =
           std::adjacent_find(quadrants.begin(), quadrants.end(),
                              std::not_equal_to<>()) == quadrants.end();
-      if(allInSameQuadrant) {
-        // all points of the polygon fall into one of the quadrants. 
-        // hence the polygon and all points that belong to it are inside the quadrant.
+      if (allInSameQuadrant) {
+        // all points of the polygon fall into one of the quadrants.
+        // hence the polygon and all points that belong to it are inside the
+        // quadrant.
         node = insertConstrain(quadrants[0], node);
-      
+
       } else {
         node->add(polygon);
         return true;
       }
-      if(node == nullptr) {
+      if (node == nullptr) {
         std::cout << "node is nullptr!!!" << std::endl;
         return false;
       }
@@ -162,8 +166,8 @@ public:
     node->add(polygon);
     return true;
   }
-  
- const std::vector<P> * query(cv::Point_<T>& p) {
+
+  const std::vector<P> *query(cv::Point_<T> &p) {
     if (root == nullptr) {
       return nullptr;
     }
@@ -171,6 +175,16 @@ public:
     Node<T, P> *node = root.get();
 
     for (int i = 0; i < depth; ++i) {
+      if(not node->empty()) {
+        for(auto& pol : node->contain){
+            double  result = cv::pointPolygonTest((*pol), p, false);
+            if(result > 0) {
+                std::cout << "TL " << node->getTL() << " BR " << node->getBR() << std::endl;
+
+                return &node->contain;
+            }
+        }
+      }
       Quadrant q = node->getQuadrant(p);
       if (q == Quadrant::NONE) {
         return nullptr;
@@ -180,9 +194,11 @@ public:
         return nullptr;
       }
     }
+    if (node != nullptr) {
+      std::cout << "TL " << node->getTL() << " BR " << node->getBR() << std::endl;
+    }
     return &node->contain;
   }
-
 };
 
 #endif //__QQUADTREE_HPP__

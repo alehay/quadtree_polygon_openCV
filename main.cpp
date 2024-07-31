@@ -9,15 +9,15 @@
 int main(int argc, char **argv) {
 
   cv::Point2i p1(0, 0);
-  std::vector<cv::Point2i> polygon = {cv::Point2i(10, 10), cv::Point2i(20, 10),
-                                      cv::Point2i(20, 20), cv::Point2i(10, 20)};
+  std::vector<cv::Point2i> polygon = {cv::Point2i(13, 13), cv::Point2i(20, 13),
+                                      cv::Point2i(20, 20), cv::Point2i(13, 20)};
 
   QuadTree<int, std::vector<cv::Point2i> *> qt;
 
   qt.setRoot({0, 0}, {100, 100});
   qt.insert(&polygon);
 
-    cv::Point2i testPoint(15, 15);
+    cv::Point2i testPoint(14, 15);
     cv::Point2i testPoint_1(25, 25);
 //  double result = cv::pointPolygonTest(polygon, testPoint, false);
 //  double result_1 = cv::pointPolygonTest(polygon, testPoint_1, false);

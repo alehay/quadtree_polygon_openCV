@@ -304,7 +304,8 @@ TEST_F(QuadTreeTest, QueryPointOnQuadrantBoundary) {
 
 /*
 
-for my application task at the moment, the polygons do not intersect, but it may be necessary in the future
+for my application task at the moment, the polygons do not intersect, but it may
+be necessary in the future
 // Test inserting a polygon with overlapping coordinates
 TEST_F(QuadTreeTest, InsertPolygonWithOverlappingCoordinates) {
   Polygon polygon1 = std::make_shared<std::vector<cv::Point2f>>();
@@ -387,7 +388,8 @@ TEST_F(QuadTreeTest, QueryPointOnMedianLine) {
 }
 
 /*
-for my application task at the moment, the polygons do not intersect, but it may be necessary in the future
+for my application task at the moment, the polygons do not intersect, but it may
+be necessary in the future
 
 // Test inserting a polygon with zero area
 TEST_F(QuadTreeTest, InsertPolygonWithZeroArea) {
@@ -400,7 +402,6 @@ TEST_F(QuadTreeTest, InsertPolygonWithZeroArea) {
   ASSERT_FALSE(quadtree.insert(polygon));
 }
 */
-
 
 // TO DO this !
 // Test querying a point after inserting and removing a polygon

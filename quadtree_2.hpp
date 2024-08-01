@@ -28,6 +28,7 @@ public:
   Node(const cv::Point_<T> &_TL, const cv::Point_<T> &_BR) : TL(_TL), BR(_BR) {}
 
   void add(P p) { contain.push_back(std::forward<P>(p)); }
+
   bool empty() const { return contain.empty(); }
 
   cv::Point_<T> get_median(const cv::Point_<T> &p1,
@@ -145,6 +146,7 @@ public:
           polygon->begin(), polygon->end(), std::back_inserter(quadrants),
           [&](const cv::Point_<T> &p) { return node->getQuadrant(p); });
 
+      // Check if all points of the polygon fall into the same quadrant
       bool allInSameQuadrant =
           std::adjacent_find(quadrants.begin(), quadrants.end(),
                              std::not_equal_to<>()) == quadrants.end();
@@ -167,6 +169,49 @@ public:
     return true;
   }
 
+   auto getContainPolygon(Node<T, P> *node, const cv::Point_<T> &p) {
+    using ReturnType = std::conditional_t<std::is_pointer_v<P>, P, P *>;
+    for (auto &pol : node->contain) {
+      double result = cv::pointPolygonTest((*pol), p, false);
+      if (result > 0) {
+        if constexpr (std::is_pointer_v<P>) {
+          return pol;
+        } else {
+          return &pol;
+        }
+      }
+    }
+    return ReturnType{nullptr}; // Ensure nullptr is cast to ReturnType
+  }
+
+  auto getPointerPolygon(cv::Point_<T> &p) {
+    using ReturnType = std::conditional_t<std::is_pointer_v<P>, P, P *>;
+    if (root == nullptr) {
+      return ReturnType{nullptr}; // Ensure nullptr is cast to ReturnType
+    }
+
+    Node<T, P> *node = root.get();
+
+    for (int i = 0; i < depth; ++i) {
+      if (not node->empty()) {
+
+        ReturnType pol = getContainPolygon(node, p);
+        if (pol != nullptr) {
+          return pol;
+        }
+      }
+      Quadrant q = node->getQuadrant(p);
+      if (q == Quadrant::NONE) {
+        return ReturnType{nullptr}; // Ensure nullptr is cast to ReturnType
+      }
+      node = node->getNodeQuadrant(q);
+      if (node == nullptr) {
+        return ReturnType{nullptr}; // Ensure nullptr is cast to ReturnType
+      }
+    }
+    return ReturnType{nullptr}; // Ensure nullptr is cast to ReturnType
+  }
+
   const std::vector<P> *query(cv::Point_<T> &p) {
     if (root == nullptr) {
       return nullptr;
@@ -175,14 +220,15 @@ public:
     Node<T, P> *node = root.get();
 
     for (int i = 0; i < depth; ++i) {
-      if(not node->empty()) {
-        for(auto& pol : node->contain){
-            double  result = cv::pointPolygonTest((*pol), p, false);
-            if(result > 0) {
-                std::cout << "TL " << node->getTL() << " BR " << node->getBR() << std::endl;
-
-                return &node->contain;
-            }
+      if (not node->empty()) {
+        // there is a possibility that the point hit the polygon at this level
+        for (auto &pol : node->contain) {
+          double result = cv::pointPolygonTest((*pol), p, false);
+          if (result > 0) {
+            std::cout << "TL " << node->getTL() << " BR " << node->getBR()
+                      << std::endl;
+            return &node->contain;
+          }
         }
       }
       Quadrant q = node->getQuadrant(p);
@@ -195,7 +241,8 @@ public:
       }
     }
     if (node != nullptr) {
-      std::cout << "TL " << node->getTL() << " BR " << node->getBR() << std::endl;
+      std::cout << "TL " << node->getTL() << " BR " << node->getBR()
+                << std::endl;
     }
     return &node->contain;
   }

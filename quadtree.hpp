@@ -1,12 +1,12 @@
 #ifndef __QUADTREE_HPP__
 #define __QUADTREE_HPP__
 
-#include <memory>
-#include <opencv2/core/types.hpp>
+#include "opencv2/highgui.hpp"
+#include "opencv2/imgproc.hpp"
+#include <opencv2/core.hpp>
 
 #include <cstdint>
 #include <memory>
-#include <opencv2/core.hpp>
 #include <type_traits>
 #include <vector>
 
@@ -14,18 +14,31 @@
 
 enum class Quadrant : std::uint8_t { TL = 0, TR = 1, BL = 2, BR = 3, NONE = 4 };
 
-template <typename T> class Node {
+template <typename T, typename P> class Node {
 public:
   cv::Point_<T> TL;
   cv::Point_<T> BR;
+  std::unique_ptr<Node<T, P>> TLNode = nullptr;
+  std::unique_ptr<Node<T, P>> TRNode = nullptr;
+  std::unique_ptr<Node<T, P>> BLNode = nullptr;
+  std::unique_ptr<Node<T, P>> BRNode = nullptr;
+  std::vector<P> contain;
 
+public:
   Node(const cv::Point_<T> &_TL, const cv::Point_<T> &_BR) : TL(_TL), BR(_BR) {}
 
-  virtual ~Node() = default; // Virtual destructor for polymorphic base class
+  void add(P p) { contain.push_back(std::forward<P>(p)); }
+
+  bool empty() const { return contain.empty(); }
+
   cv::Point_<T> get_median(const cv::Point_<T> &p1,
                            const cv::Point_<T> &p2) const {
     return (p1 + p2) / 2;
   }
+
+  cv::Point_<T> getTL() const { return TL; }
+  cv::Point_<T> getBR() const { return BR; }
+
   Quadrant getQuadrant(const cv::Point_<T> &p) const {
     if (p.x < TL.x || p.y < TL.y || p.x > BR.x || p.y > BR.y) {
       return Quadrant::NONE;
@@ -42,6 +55,22 @@ public:
       return Quadrant::BR;
 
     return Quadrant::NONE;
+  }
+
+  Node<T, P> *getNodeQuadrant(Quadrant q) {
+    switch (q) {
+    case Quadrant::TL:
+      return TLNode.get();
+    case Quadrant::TR:
+      return TRNode.get();
+    case Quadrant::BL:
+      return BLNode.get();
+    case Quadrant::BR:
+      return BRNode.get();
+    case Quadrant::NONE:
+    default:
+      return nullptr;
+    }
   }
 
   std::pair<cv::Point_<T>, cv::Point_<T>> getPointToQuadrant(Quadrant q) {
@@ -63,115 +92,57 @@ public:
       return std::make_pair(cv::Point_<T>(), cv::Point_<T>());
     }
   }
-
-  //  virtual std::unique_ptr<Node<T>> createConstrainNode() = 0;
-  //  virtual std::unique_ptr<Node<T>> createContainNode() = 0;
-};
-
-template <typename T> class ConstrainNode : public Node<T> {
-public:
-  std::unique_ptr<Node<T>> TLNode = nullptr;
-  std::unique_ptr<Node<T>> TRNode = nullptr;
-  std::unique_ptr<Node<T>> BLNode = nullptr;
-  std::unique_ptr<Node<T>> BRNode = nullptr;
-
-  ConstrainNode(cv::Point_<T> _TL, cv::Point_<T> _BR) : Node<T>(_TL, _BR) {}
-
-  ~ConstrainNode() override = default;
-
-  std::unique_ptr<Node<T>> createConstrainNode(Quadrant q) {
-    // Implementation for creating a constrain node
-  }
-
-  std::unique_ptr<Node<T>> createContainNode() {
-    // Implementation for creating a contain node
-  }
-};
-
-template <typename T, typename Cont> class ContainNode : public Node<T> {
-public:
-  Cont ContValue;
-
-  // ContainNode(const cv::Point_<T>& _TL, const cv::Point_<T>& _BR, Cont&&
-  // _Cont)
-  //         : Node<T>(_TL, _BR), ContValue(std::forward<Cont>(_Cont)) {}
-
-  // ContainNode(const cv::Point_<T>& _TL, const cv::Point_<T>& _BR, Cont _Cont)
-  //         : Node<T>(_TL, _BR), ContValue(_Cont) {}
-
-  ContainNode(const cv::Point_<T> &_TL, const cv::Point_<T> &_BR, Cont _Cont)
-      : Node<T>(_TL, _BR), ContValue(_Cont) {}
-
-  ~ContainNode() override = default;
-
-  std::unique_ptr<Node<T>> createConstrainNode() {
-    // Implementation for creating a constrain node
-  }
-
-  std::unique_ptr<Node<T>> createContainNode() {
-    // Implementation for creating a contain node
-  }
 };
 
 template <typename T, typename P> class QuadTree {
+protected:
+  std::unique_ptr<Node<T, P>> root = nullptr;
+  std::size_t depth = 6;
+
 private:
-  std::unique_ptr<ConstrainNode<T>> root = nullptr;
-  std::size_t depth = 2;
+  auto getContainPolygon(Node<T, P> *node, const cv::Point_<T> &p) {
+    using ReturnType = std::conditional_t<std::is_pointer_v<P>, P, P *>;
+    for (auto &pol : node->contain) {
+      double result = cv::pointPolygonTest((*pol), p, false);
+      if (result >= 0) {
+        if constexpr (std::is_pointer_v<P>) {
+          return pol;
+        } else {
+          return &pol;
+        }
+      }
+    }
+    return ReturnType{nullptr}; // Ensure nullptr is cast to ReturnType
+  }
 
 public:
   QuadTree() = default;
 
   bool setRoot(cv::Point_<T> TL, cv::Point_<T> BR) {
-    root = std::make_unique<ConstrainNode<T>>(TL, BR);
+    root = std::make_unique<Node<T, P>>(TL, BR);
     return true;
   }
 
-  ConstrainNode<T> *insertConstrain(Quadrant q, ConstrainNode<T> *node) {
+  Node<T, P> *insertConstrain(Quadrant q, Node<T, P> *node) {
     std::pair<cv::Point_<T>, cv::Point_<T>> new_rect =
         node->getPointToQuadrant(q);
     switch (q) {
     case Quadrant::TL:
-      node->TLNode = std::make_unique<ConstrainNode<T>>(
-          ConstrainNode<T>(new_rect.first, new_rect.second));
-      return TLNode.get();
+      node->TLNode = std::make_unique<Node<T, P>>(
+          Node<T, P>(new_rect.first, new_rect.second));
+      return node->TLNode.get();
     case Quadrant::TR:
-      node->TRNode = std::make_unique<ConstrainNode<T>>(
-          ConstrainNode<T>(new_rect.first, new_rect.second));
-      return TRNode.get();
+      node->TRNode = std::make_unique<Node<T, P>>(
+          Node<T, P>(new_rect.first, new_rect.second));
+      return node->TRNode.get();
     case Quadrant::BL:
-      node->BLNode = std::make_unique<ConstrainNode<T>>(
-          ConstrainNode<T>(new_rect.first, new_rect.second));
-      return BLNode.get();
+      node->BLNode = std::make_unique<Node<T, P>>(
+          Node<T, P>(new_rect.first, new_rect.second));
+      return node->BLNode.get();
     case Quadrant::BR:
-      node->BRNode = std::make_unique<ConstrainNode<T>>(
-          ConstrainNode<T>(new_rect.first, new_rect.second));
-      return BRNode.get();
-    case Quadrant::NONE:
-    default:
-      return nullptr;
-    }
-  }
-
-  bool insertContain(Quadrant q, ConstrainNode<T> *node) {
-    std::pairr<cv::Point_<T>, cv::Point_<T>> new_rect =
-        node->getPointToQuadrant(q);
-    switch (q) {
-    case Quadrant::TL:
-      node->TLNode = std::make_unique<ContainNode<T, P>>(
-          ContainNode<T, P>(new_rect.first, new_rect.second));
-      return TLNode.get();
-    case Quadrant::TR:
-      node->TRNode = std::make_unique<ContainNode<T, P>>(
-          ContainNode<T, P>(new_rect.first, new_rect.second));
-      return TRNode.get();
-    case Quadrant::BL:
-      node->BLNode = std::make_unique<ContainNode<T, P>>(
-          ContainNode<T, P>(new_rect.first, new_rect.second));
-      return BLNode.get();
-    case Quadrant::BR:
-      node->BRNode = std::make_unique<ContainNode<T, P>>(
-          ContainNode<T, P>(new_rect.first, new_rect.second));
-      return BRNode.get();
+      node->BRNode = std::make_unique<Node<T, P>>(
+          Node<T, P>(new_rect.first, new_rect.second));
+      return node->BRNode.get();
     case Quadrant::NONE:
     default:
       return nullptr;
@@ -179,11 +150,11 @@ public:
   }
 
   bool insert(P polygon) {
-    if (!root)
+    if (root == nullptr) {
       return false;
+    }
 
-    int insert_deph = depth;
-    ConstrainNode<T> *node = root.get();
+    Node<T, P> *node = root.get();
 
     for (int i = 0; i < depth; ++i) {
       std::vector<Quadrant> quadrants;
@@ -192,16 +163,94 @@ public:
           polygon->begin(), polygon->end(), std::back_inserter(quadrants),
           [&](const cv::Point_<T> &p) { return node->getQuadrant(p); });
 
+      // Check if all points of the polygon fall into the same quadrant
       bool allInSameQuadrant =
           std::adjacent_find(quadrants.begin(), quadrants.end(),
                              std::not_equal_to<>()) == quadrants.end();
 
-      if (allInSameQuadrant) {
-        node =  node->createConstrainNode(quadrants[0]);
-      } else () 
+      bool noneDetect = std::find(quadrants.begin(), quadrants.end(),
+                                  Quadrant::NONE) != quadrants.end();
 
+      if (noneDetect) {
+        return false;
+      }
+
+      if (allInSameQuadrant) {
+        // all points of the polygon fall into one of the quadrants.
+        // hence the polygon and all points that belong to it are inside the
+        // quadrant.
+        node = insertConstrain(quadrants[0], node);
+
+      } else {
+        node->add(polygon);
+        return true;
+      }
+      if (node == nullptr) {
+        return false;
+      }
     }
+    node->add(polygon);
     return true;
+  }
+
+  auto getPointerPolygon(cv::Point_<T> &p) {
+    using ReturnType = std::conditional_t<std::is_pointer_v<P>, P, P *>;
+    if (root == nullptr) {
+      return ReturnType{nullptr}; // Ensure nullptr is cast to ReturnType
+    }
+
+    Node<T, P> *node = root.get();
+
+    for (int i = 0; i < depth; ++i) {
+      if (not node->empty()) {
+
+        ReturnType pol = getContainPolygon(node, p);
+        if (pol != nullptr) {
+          return pol;
+        }
+      }
+      Quadrant q = node->getQuadrant(p);
+      if (q == Quadrant::NONE) {
+        return ReturnType{nullptr}; // Ensure nullptr is cast to ReturnType
+      }
+      node = node->getNodeQuadrant(q);
+      if (node == nullptr) {
+        return ReturnType{nullptr}; // Ensure nullptr is cast to ReturnType
+      }
+    }
+    return ReturnType{nullptr}; // Ensure nullptr is cast to ReturnType
+  }
+
+  const std::vector<P> *query(cv::Point_<T> &p) {
+    if (root == nullptr) {
+      return nullptr;
+    }
+
+    Node<T, P> *node = root.get();
+
+    for (int i = 0; i < depth; ++i) {
+      if (not node->empty()) {
+        // there is a possibility that the point hit the polygon at this level
+        for (auto &pol : node->contain) {
+          double result = cv::pointPolygonTest((*pol), p, false);
+          if (result >= 0) {
+            return &node->contain;
+          }
+        }
+      }
+      Quadrant q = node->getQuadrant(p);
+      if (q == Quadrant::NONE) {
+        return nullptr;
+      }
+      node = node->getNodeQuadrant(q);
+      if (node == nullptr) {
+        return nullptr;
+      }
+    }
+    if (node != nullptr) {
+      return &node->contain;
+    }
+    return nullptr;
   }
 };
 

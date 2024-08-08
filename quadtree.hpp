@@ -128,20 +128,28 @@ public:
         node->getPointToQuadrant(q);
     switch (q) {
     case Quadrant::TL:
-      node->TLNode = std::make_unique<Node<T, P>>(
-          Node<T, P>(new_rect.first, new_rect.second));
+      if (node->TLNode == nullptr) {
+        node->TLNode = std::make_unique<Node<T, P>>(
+            Node<T, P>(new_rect.first, new_rect.second));
+      }
       return node->TLNode.get();
     case Quadrant::TR:
-      node->TRNode = std::make_unique<Node<T, P>>(
-          Node<T, P>(new_rect.first, new_rect.second));
+      if (node->TRNode == nullptr) {
+        node->TRNode = std::make_unique<Node<T, P>>(
+            Node<T, P>(new_rect.first, new_rect.second));
+      }
       return node->TRNode.get();
     case Quadrant::BL:
-      node->BLNode = std::make_unique<Node<T, P>>(
-          Node<T, P>(new_rect.first, new_rect.second));
+      if (node->BRNode == nullptr) {
+        node->BLNode = std::make_unique<Node<T, P>>(
+            Node<T, P>(new_rect.first, new_rect.second));
+      }
       return node->BLNode.get();
     case Quadrant::BR:
-      node->BRNode = std::make_unique<Node<T, P>>(
-          Node<T, P>(new_rect.first, new_rect.second));
+      if (node->BRNode == nullptr) {
+        node->BRNode = std::make_unique<Node<T, P>>(
+            Node<T, P>(new_rect.first, new_rect.second));
+      }
       return node->BRNode.get();
     case Quadrant::NONE:
     default:

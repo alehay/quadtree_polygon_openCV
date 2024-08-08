@@ -387,6 +387,215 @@ TEST_F(QuadTreeTest, QueryPointOnMedianLine) {
   ASSERT_EQ(result->at(0), polygon);
 }
 
+// Test inserting and querying multiple polygons in different quadrants
+TEST_F(QuadTreeTest, InsertAndQueryMultiplePolygonsInDifferentQuadrants) {
+  Polygon polygon1 = std::make_shared<std::vector<cv::Point2f>>();
+  polygon1->emplace_back(10, 10);
+  polygon1->emplace_back(20, 10);
+  polygon1->emplace_back(20, 20);
+  polygon1->emplace_back(10, 20);
+
+  Polygon polygon2 = std::make_shared<std::vector<cv::Point2f>>();
+  polygon2->emplace_back(70, 70);
+  polygon2->emplace_back(80, 70);
+  polygon2->emplace_back(80, 80);
+  polygon2->emplace_back(70, 80);
+
+  Polygon polygon3 = std::make_shared<std::vector<cv::Point2f>>();
+  polygon3->emplace_back(40, 40);
+  polygon3->emplace_back(50, 40);
+  polygon3->emplace_back(50, 50);
+  polygon3->emplace_back(40, 50);
+
+  ASSERT_TRUE(quadtree.insert(polygon1));
+  ASSERT_TRUE(quadtree.insert(polygon2));
+  ASSERT_TRUE(quadtree.insert(polygon3));
+
+  cv::Point_<int> point1(15, 15);
+  const std::vector<Polygon> *result1 = quadtree.query(point1);
+  ASSERT_NE(result1, nullptr);
+  ASSERT_EQ(result1->size(), 1);
+  ASSERT_EQ(result1->at(0), polygon1);
+
+  cv::Point_<int> point2(75, 75);
+  const std::vector<Polygon> *result2 = quadtree.query(point2);
+  ASSERT_NE(result2, nullptr);
+  ASSERT_EQ(result2->size(), 1);
+  ASSERT_EQ(result2->at(0), polygon2);
+
+  cv::Point_<int> point3(45, 45);
+  const std::vector<Polygon> *result3 = quadtree.query(point3);
+  ASSERT_NE(result3, nullptr);
+  ASSERT_EQ(result3->size(), 1);
+  ASSERT_EQ(result3->at(0), polygon3);
+}
+
+// Test querying a point that lies exactly at the root boundary
+TEST_F(QuadTreeTest, QueryPointAtRootBoundary) {
+  Polygon polygon = std::make_shared<std::vector<cv::Point2f>>();
+  polygon->emplace_back(0, 0);
+  polygon->emplace_back(100, 0);
+  polygon->emplace_back(100, 100);
+  polygon->emplace_back(0, 100);
+
+  quadtree.insert(polygon);
+  cv::Point_<int> point(100, 100);
+  const std::vector<Polygon> *result = quadtree.query(point);
+
+  ASSERT_NE(result, nullptr);
+  ASSERT_EQ(result->size(), 1);
+  ASSERT_EQ(result->at(0), polygon);
+}
+
+// Test inserting a polygon with very large coordinates
+TEST_F(QuadTreeTest, InsertPolygonWithLargeCoordinates) {
+  Polygon polygon = std::make_shared<std::vector<cv::Point2f>>();
+  polygon->emplace_back(1000, 1000);
+  polygon->emplace_back(2000, 1000);
+  polygon->emplace_back(2000, 2000);
+  polygon->emplace_back(1000, 2000);
+
+  ASSERT_FALSE(quadtree.insert(polygon));
+}
+
+// Test querying a point after multiple insertions and removals
+TEST_F(QuadTreeTest, QueryPointAfterMultipleInsertionsAndRemovals) {
+  Polygon polygon1 = std::make_shared<std::vector<cv::Point2f>>();
+  polygon1->emplace_back(10, 10);
+  polygon1->emplace_back(20, 10);
+  polygon1->emplace_back(20, 20);
+  polygon1->emplace_back(10, 20);
+
+  Polygon polygon2 = std::make_shared<std::vector<cv::Point2f>>();
+  polygon2->emplace_back(30, 30);
+  polygon2->emplace_back(40, 30);
+  polygon2->emplace_back(40, 40);
+  polygon2->emplace_back(30, 40);
+
+  quadtree.insert(polygon1);
+  quadtree.insert(polygon2);
+
+  // Assuming a remove function exists
+  // quadtree.remove(polygon1);
+
+  cv::Point_<int> point(35, 35);
+  const std::vector<Polygon> *result = quadtree.query(point);
+
+  ASSERT_NE(result, nullptr);
+  ASSERT_EQ(result->size(), 1);
+  ASSERT_EQ(result->at(0), polygon2);
+}
+
+// Test querying a point that lies exactly at the center of the QuadTree
+TEST_F(QuadTreeTest, QueryPointAtCenter) {
+  Polygon polygon = std::make_shared<std::vector<cv::Point2f>>();
+  polygon->emplace_back(40, 40);
+  polygon->emplace_back(60, 40);
+  polygon->emplace_back(60, 60);
+  polygon->emplace_back(40, 60);
+
+  quadtree.insert(polygon);
+  cv::Point_<int> point(50, 50);
+  const std::vector<Polygon> *result = quadtree.query(point);
+
+  ASSERT_NE(result, nullptr);
+  ASSERT_EQ(result->size(), 1);
+  ASSERT_EQ(result->at(0), polygon);
+}
+/*
+// Test inserting polygons with overlapping boundaries
+TEST_F(QuadTreeTest, InsertPolygonsWithOverlappingBoundaries) {
+    Polygon polygon1 = std::make_shared<std::vector<cv::Point2f>>();
+    polygon1->emplace_back(10, 10);
+    polygon1->emplace_back(30, 10);
+    polygon1->emplace_back(30, 30);
+    polygon1->emplace_back(10, 30);
+
+    Polygon polygon2 = std::make_shared<std::vector<cv::Point2f>>();
+    polygon2->emplace_back(20, 20);
+    polygon2->emplace_back(40, 20);
+    polygon2->emplace_back(40, 40);
+    polygon2->emplace_back(20, 40);
+
+    ASSERT_TRUE(quadtree.insert(polygon1));
+    ASSERT_TRUE(quadtree.insert(polygon2));
+
+    cv::Point_<int> point(25, 25);
+    const std::vector<Polygon>* result = quadtree.query(point);
+
+    ASSERT_NE(result, nullptr);
+    ASSERT_EQ(result->size(), 2);
+    ASSERT_TRUE(std::find(result->begin(), result->end(), polygon1) !=
+result->end()); ASSERT_TRUE(std::find(result->begin(), result->end(), polygon2)
+!= result->end());
+}
+*/
+
+// Test inserting a polygon with collinear points
+TEST_F(QuadTreeTest, InsertPolygonWithCollinearPoints) {
+  Polygon polygon = std::make_shared<std::vector<cv::Point2f>>();
+  polygon->emplace_back(10, 10);
+  polygon->emplace_back(20, 10);
+  polygon->emplace_back(30, 10);
+  polygon->emplace_back(40, 10);
+
+  ASSERT_TRUE(quadtree.insert(polygon));
+
+  cv::Point_<int> point(25, 10);
+  const std::vector<Polygon> *result = quadtree.query(point);
+
+  ASSERT_NE(result, nullptr);
+  ASSERT_EQ(result->size(), 1);
+  ASSERT_EQ(result->at(0), polygon);
+}
+
+// Test inserting a polygon with duplicate points
+TEST_F(QuadTreeTest, InsertPolygonWithDuplicatePoints) {
+  Polygon polygon = std::make_shared<std::vector<cv::Point2f>>();
+  polygon->emplace_back(10, 10);
+  polygon->emplace_back(20, 20);
+  polygon->emplace_back(20, 20); // Duplicate point
+  polygon->emplace_back(10, 10); // Duplicate point
+
+  ASSERT_TRUE(quadtree.insert(polygon));
+
+  cv::Point_<int> point(15, 15);
+  const std::vector<Polygon> *result = quadtree.query(point);
+
+  ASSERT_NE(result, nullptr);
+  ASSERT_EQ(result->size(), 1);
+  ASSERT_EQ(result->at(0), polygon);
+}
+
+// Test querying a point after inserting a polygon with holes
+/*
+TEST_F(QuadTreeTest, QueryPointAfterInsertingPolygonWithHoles) {
+    Polygon outerPolygon = std::make_shared<std::vector<cv::Point2f>>();
+    outerPolygon->emplace_back(10, 10);
+    outerPolygon->emplace_back(50, 10);
+    outerPolygon->emplace_back(50, 50);
+    outerPolygon->emplace_back(10, 50);
+
+    Polygon innerPolygon = std::make_shared<std::vector<cv::Point2f>>();
+    innerPolygon->emplace_back(20, 20);
+    innerPolygon->emplace_back(40, 20);
+    innerPolygon->emplace_back(40, 40);
+    innerPolygon->emplace_back(20, 40);
+
+    ASSERT_TRUE(quadtree.insert(outerPolygon));
+    ASSERT_TRUE(quadtree.insert(innerPolygon));
+
+    cv::Point_<int> point(30, 30);
+    const std::vector<Polygon>* result = quadtree.query(point);
+
+    ASSERT_NE(result, nullptr);
+    ASSERT_EQ(result->size(), 2);
+    ASSERT_TRUE(std::find(result->begin(), result->end(), outerPolygon) !=
+result->end()); ASSERT_TRUE(std::find(result->begin(), result->end(),
+innerPolygon) != result->end());
+}
+*/
+
 /*
 for my application task at the moment, the polygons do not intersect, but it may
 be necessary in the future

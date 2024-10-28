@@ -201,7 +201,7 @@ public:
     return true;
   }
 
-  auto getPointerPolygon(cv::Point_<T> &p) {
+  auto getPointerPolygon(cv::Point_<T> const &p) {
     using ReturnType = std::conditional_t<std::is_pointer_v<P>, P, P *>;
     if (root == nullptr) {
       return ReturnType{nullptr}; // Ensure nullptr is cast to ReturnType

@@ -12,4 +12,7 @@ RTree query time: 10.438 ms
 Brute Force query time: 1620.97 ms
 Mismatches qt: 0
 ```
+
+
+polygons, red dots are queries
 ![Speed Test Results](field_visualization.png)

@@ -1,7 +1,6 @@
 #ifndef __QUADTREE_HPP__
 #define __QUADTREE_HPP__
 
-#include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
 #include <opencv2/core.hpp>
 
@@ -140,7 +139,7 @@ public:
       }
       return node->TRNode.get();
     case Quadrant::BL:
-      if (node->BRNode == nullptr) {
+      if (node->BLNode == nullptr) {
         node->BLNode = std::make_unique<Node<T, P>>(
             Node<T, P>(new_rect.first, new_rect.second));
       }
@@ -158,7 +157,7 @@ public:
   }
 
   bool insert(P polygon) {
-    if (root == nullptr) {
+    if (root == nullptr || polygon == nullptr || polygon->empty()) {
       return false;
     }
 
@@ -209,7 +208,10 @@ public:
 
     Node<T, P> *node = root.get();
 
-    for (int i = 0; i < depth; ++i) {
+    for (std::size_t i = 0; i <= depth; ++i) {
+      if (node->getQuadrant(p) == Quadrant::NONE) {
+        return ReturnType{nullptr};
+      }
       if (not node->empty()) {
 
         ReturnType pol = getContainPolygon(node, p);
@@ -218,8 +220,8 @@ public:
         }
       }
       Quadrant q = node->getQuadrant(p);
-      if (q == Quadrant::NONE) {
-        return ReturnType{nullptr}; // Ensure nullptr is cast to ReturnType
+      if (i == depth) {
+        break;
       }
       node = node->getNodeQuadrant(q);
       if (node == nullptr) {
@@ -229,36 +231,33 @@ public:
     return ReturnType{nullptr}; // Ensure nullptr is cast to ReturnType
   }
 
-  const std::vector<P> *query(cv::Point_<T> &p) {
+  std::vector<P> query(const cv::Point_<T> &p) const {
+    std::vector<P> matches;
     if (root == nullptr) {
-      return nullptr;
+      return matches;
     }
 
     Node<T, P> *node = root.get();
 
-    for (int i = 0; i < depth; ++i) {
-      if (not node->empty()) {
-        // there is a possibility that the point hit the polygon at this level
-        for (auto &pol : node->contain) {
-          double result = cv::pointPolygonTest((*pol), p, false);
-          if (result >= 0) {
-            return &node->contain;
-          }
-        }
-      }
+    for (std::size_t i = 0; i <= depth; ++i) {
       Quadrant q = node->getQuadrant(p);
       if (q == Quadrant::NONE) {
-        return nullptr;
+        break;
+      }
+      for (const auto &pol : node->contain) {
+        if (cv::pointPolygonTest(*pol, p, false) >= 0) {
+          matches.push_back(pol);
+        }
+      }
+      if (i == depth) {
+        break;
       }
       node = node->getNodeQuadrant(q);
       if (node == nullptr) {
-        return nullptr;
+        break;
       }
     }
-    if (node != nullptr) {
-      return &node->contain;
-    }
-    return nullptr;
+    return matches;
   }
 };
 

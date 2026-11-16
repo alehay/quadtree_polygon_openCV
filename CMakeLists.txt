@@ -8,9 +8,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-find_package(OpenCV 4.9.0 REQUIRED)
-FIND_PACKAGE( Boost  COMPONENTS program_options REQUIRED )
-include_directories( ${Boost_INCLUDE_DIR} )
+find_package(OpenCV 4.9.0 REQUIRED COMPONENTS core imgproc)
 include_directories ( ${OpenCV_INCLUDE_DIRS})
 
 IF(tsan)
@@ -89,19 +87,21 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "OpenCV version: ${OpenCV_VERSION}")
 
 # Google Test setup
-include(FetchContent)
-FetchContent_Declare(
-    googletest
-    URL https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip
-)
-# For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+find_package(GTest QUIET)
+if(NOT GTest_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(
+        googletest
+        URL https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip
+    )
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+endif()
 
 enable_testing()
 
 add_executable(tests test_qdtree.cpp test_rtree.cpp)
-target_link_libraries(tests  ${Boost_LIBRARIES}  ${OpenCV_LIBS} gtest_main)
+target_link_libraries(tests ${OpenCV_LIBS} GTest::gtest_main)
 set_strict_compile_options(tests)
 
 include(GoogleTest)
@@ -109,7 +109,7 @@ gtest_discover_tests(tests)
 
 
 add_executable(speed_test speed_test.cpp)
-target_link_libraries(speed_test ${Boost_LIBRARIES}  ${OpenCV_LIBS})
+target_link_libraries(speed_test ${OpenCV_LIBS})
 target_compile_options(speed_test PRIVATE -O2  -DNDEBUG -fomit-frame-pointer )
 
 

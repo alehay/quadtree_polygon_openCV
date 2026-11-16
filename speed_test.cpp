@@ -2,7 +2,7 @@
 #include "rtree.hpp"
 #include <chrono>
 #include <iostream>
-#include <opencv2/opencv.hpp>
+#include <opencv2/imgproc.hpp>
 #include <random>
 #include <vector>
 
@@ -21,31 +21,14 @@ std::vector<cv::Point2i> generateRandomPolygon(int minX, int maxX, int minY,
   return polygon;
 }
 
-cv::Scalar getColorFromNumbers(int number1, int number2)
-
-{
-  std::size_t h1 = std::hash<int>{}(number1);
-  std::size_t h2 = std::hash<int>{}(number2);
-  std::size_t res = h1 ^ (h2 << 1);
-
-  int r = (h1 % 128) + 128;
-  int g = (h2 % 128) + 128;
-  int b = (res % 128) + 128;
-
-  return cv::Scalar(b, g, r);
-}
-
 bool polygonsIntersect(const std::vector<cv::Point2i>& poly1, const std::vector<cv::Point2i>& poly2) {
-    std::vector<cv::Point2f> poly1f(poly1.begin(), poly1.end());
-    std::vector<cv::Point2f> poly2f(poly2.begin(), poly2.end());
-    cv::Mat intersectingRegion;
-    return cv::rotatedRectangleIntersection(cv::minAreaRect(poly1f), cv::minAreaRect(poly2f), intersectingRegion) != cv::INTERSECT_NONE;
+    // The benchmark generates axis-aligned rectangles in vertex order.
+    return poly1[0].x <= poly2[2].x && poly2[0].x <= poly1[2].x &&
+           poly1[0].y <= poly2[2].y && poly2[0].y <= poly1[2].y;
 }
 
 
-std::vector<cv::Point2i> generateSmallRandomRectangle(int minX, int maxX, int minY, int maxY, int maxSize, const std::vector<std::vector<cv::Point2i>>& existingPolygons) {
-    std::random_device rd;
-    std::mt19937 gen(rd());
+std::vector<cv::Point2i> generateSmallRandomRectangle(int minX, int maxX, int minY, int maxY, int maxSize, const std::vector<std::vector<cv::Point2i>>& existingPolygons, std::mt19937 &gen) {
     std::uniform_int_distribution<> disX(minX, maxX - maxSize);
     std::uniform_int_distribution<> disY(minY, maxY - maxSize);
     std::uniform_int_distribution<> disSize(10, maxSize);
@@ -84,9 +67,9 @@ std::vector<cv::Point2i> generateSmallRandomRectangle(int minX, int maxX, int mi
 
 // Function to measure execution time
 template <typename Func> double measureExecutionTime(Func func) {
-  auto start = std::chrono::high_resolution_clock::now();
+  auto start = std::chrono::steady_clock::now();
   func();
-  auto end = std::chrono::high_resolution_clock::now();
+  auto end = std::chrono::steady_clock::now();
   return std::chrono::duration_cast<std::chrono::microseconds>(end - start)
              .count() /
          1000.0;
@@ -115,13 +98,17 @@ int main() {
   const int NUM_QUERIES = 1 << 15;
   const int WORLD_SIZE = 1 << 11;
 
+    std::mt19937 gen(12345);
+    std::uniform_int_distribution<int> queryCoordinate(0, WORLD_SIZE - 1);
     std::vector<std::vector<cv::Point2i>> polygons;
     for (int i = 0; i < NUM_POLYGONS; ++i) {
-        auto newPolygon = generateSmallRandomRectangle(0, WORLD_SIZE, 0, WORLD_SIZE, 100, polygons);
+        auto newPolygon = generateSmallRandomRectangle(0, WORLD_SIZE, 0, WORLD_SIZE, 100, polygons, gen);
         if (!newPolygon.empty()) {
             polygons.push_back(newPolygon);
         }
     }
+  std::cout << "Polygons: " << polygons.size() << ", queries: "
+            << NUM_QUERIES << "\n";
 
   QuadTree<int, std::vector<cv::Point2i> *> qt;
   RTree<int, std::vector<cv::Point2i> *> rt;
@@ -146,38 +133,36 @@ int main() {
   // Generate query points
   std::vector<cv::Point2i> queryPoints;
   for (int i = 0; i < NUM_QUERIES; ++i) {
-    queryPoints.emplace_back(rand() % WORLD_SIZE, rand() % WORLD_SIZE);
+    queryPoints.emplace_back(queryCoordinate(gen), queryCoordinate(gen));
   }
 
   // Measure query time
+  std::size_t qtHits = 0;
+  std::size_t rtHits = 0;
+  std::size_t bfHits = 0;
   double qtQueryTime = measureExecutionTime([&]() {
     for (const auto &point : queryPoints) {
-      volatile std::vector<cv::Point2i> *vp =
-          static_cast<volatile std::vector<cv::Point2i> *>(
-              qt.getPointerPolygon(point));
+      qtHits += qt.getPointerPolygon(point) != nullptr;
     }
   });
 
   double rtQueryTime = measureExecutionTime([&]() {
     for (const auto &point : queryPoints) {
-      volatile std::vector<cv::Point2i> *vp =
-          static_cast<volatile std::vector<cv::Point2i> *>(
-              rt.getPointerPolygon(point));
+      rtHits += rt.getPointerPolygon(point) != nullptr;
     }
   });
 
   // Measure brute force query time
   double bfQueryTime = measureExecutionTime([&]() {
     for (const auto &point : queryPoints) {
-      volatile std::vector<cv::Point2i> *vp =
-          static_cast<volatile std::vector<cv::Point2i> *>(
-              bruteForceQuery(point, polygons));
+      bfHits += bruteForceQuery(point, polygons) != nullptr;
     }
   });
 
   std::cout << "QuadTree query time: " << qtQueryTime << " ms\n";
   std::cout << "RTree query time: " << rtQueryTime << " ms\n";
   std::cout << "Brute Force query time: " << bfQueryTime << " ms\n";
+  std::cout << "Hits qt/rt/brute: " << qtHits << "/" << rtHits << "/" << bfHits << "\n";
 
   int miss_match_qt = 0;
   int good_match_qt = 0;
@@ -192,7 +177,7 @@ int main() {
     if (polygon_qt == polygon_bf) {
       ++good_match_qt;
     } else {
-      ++miss_match_rt;
+      ++miss_match_qt;
     }
 
     if (polygon_rt == polygon_bf) {
@@ -206,35 +191,6 @@ int main() {
             << "Good matches: " << good_match_qt << "\n";
   std::cout << "Mismatches rt: " << miss_match_rt << "\n"
             << "Good matches: " << good_match_rt << "\n";
-
-      // Create an image to visualize the field
-    cv::Mat image(WORLD_SIZE, WORLD_SIZE, CV_8UC3, cv::Scalar(255, 255, 255));
-
-    // Draw polygons
-    for (const auto& polygon : polygons) {
-        std::vector<std::vector<cv::Point>> contours = {polygon};
-        cv::drawContours(image, contours, 0, getColorFromNumbers(contours[0][0].x, contours[0][0].y ), 2);
-    }
-
-    // Draw query points
-    for (const auto& point : queryPoints) {
-        cv::circle(image, point, 2, cv::Scalar(0, 0, 255), -1);
-    }
-
-    // Resize the image for better visibility (optional)
-    cv::Mat resized_image;
-    cv::resize(image, resized_image, cv::Size(), 0.5, 0.5);
-
-    // Display the image
-    cv::imshow("Field with Polygons and Query Points", resized_image);
-    cv::waitKey(0);
-
-    // Save the image
-    cv::imwrite("field_visualization.png", resized_image);
-
-    // ... (keep your existing code for performance measurements and result comparison)
-
-    return 0;
 
   return 0;
 }

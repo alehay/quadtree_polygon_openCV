@@ -150,7 +150,7 @@ TEST_F(RTreeTest, InsertManySmallPolygons) {
   cv::Point2f point(50, 50);
   auto result = rtree.query(point);
 
-  ASSERT_EQ(result.size(), 1);
+  ASSERT_EQ(result.size(), 2);
 }
 
 // Test inserting and querying multiple polygons in different areas

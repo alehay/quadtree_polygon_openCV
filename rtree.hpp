@@ -7,7 +7,6 @@
 #include <boost/geometry/geometries/polygon.hpp>
 #include <boost/geometry/index/rtree.hpp>
 
-#include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
 #include <opencv2/core.hpp>
 
@@ -43,31 +42,26 @@ public:
     return true;
   }
 
-  auto getPointerPolygon(const cv::Point_<T> &p) {
-    using ReturnType = std::conditional_t<std::is_pointer_v<P>, P, P *>;
+  P getPointerPolygon(const cv::Point_<T> &p) {
     Point queryPoint(p.x, p.y);
 
     std::vector<Value> result;
-    rtree.query(bgi::contains(queryPoint), std::back_inserter(result));
+    rtree.query(bgi::intersects(queryPoint), std::back_inserter(result));
 
     for (const auto &item : result) {
       if (cv::pointPolygonTest(*item.second, p, false) >= 0) {
-        if constexpr (std::is_pointer_v<P>) {
-          return item.second;
-        } else {
-          return &item.second;
-        }
+        return item.second;
       }
     }
 
-    return ReturnType{nullptr};
+    return P{};
   }
 
   std::vector<P> query(const cv::Point_<T> &p) {
     Point queryPoint(p.x, p.y);
 
     std::vector<Value> result;
-    rtree.query(bgi::contains(queryPoint), std::back_inserter(result));
+    rtree.query(bgi::intersects(queryPoint), std::back_inserter(result));
 
     std::vector<P> polygons;
     for (const auto &item : result) {
